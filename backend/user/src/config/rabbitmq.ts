@@ -1,6 +1,4 @@
 import amqp from 'amqplib'
-import dotenv from 'dotenv';
-dotenv.config();
 
 export let channel: amqp.Channel;
 
