@@ -16,9 +16,37 @@ datasource db {
 model Chat {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
   users         String[]
-  latestMessage String?  
-  latestSender  String? 
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  latestMessage String?
+  latestSender  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages Message[]
+}
+
+enum MessageType {
+  text
+  image
+}
+
+type ImagePayload {
+  url      String
+  publicId String
+}
+
+model Message {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  chatId String @db.ObjectId
+  chat   Chat   @relation(fields: [chatId], references: [id])
+
+  sender      String
+  text        String?
+  image       ImagePayload?
+  messageType MessageType   @default(text)
+
+  seen   Boolean   @default(false)
+  seenAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
