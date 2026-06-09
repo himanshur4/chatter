@@ -4,7 +4,7 @@ import { connectDb } from './config/db.js';
 import { createClient } from 'redis';
 import userRoutes from './routes/user.js'
 import { connectRabbitMQ } from './config/rabbitmq.js';
-
+import cors from 'cors';
 
 dotenv.config();
 
@@ -15,15 +15,13 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(express.json());
-
+app.use(cors());
 app.use("/api/v1",userRoutes);
 
 redisClient
   .connect()
   .then(() => console.log("connected to redis"))
   .catch(console.error);
-
-app.use(express.json());
 
 app.listen(PORT, async () => {
   console.log(`[User Service] Server is running on port ${PORT}`);
