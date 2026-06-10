@@ -63,7 +63,7 @@ export const getAllChats = TryCatch(async (req: AuthenticatedRequest, res) => {
         }
     });
 
-    const chatDataWithDetails = Promise.all(
+    const chatDataWithDetails =await Promise.all(
         chats.map(async (chat) => {
             const otherUserId = chat.users.find((id) => id !== userId);
             let otherUserData = null;
@@ -108,4 +108,85 @@ export const getAllChats = TryCatch(async (req: AuthenticatedRequest, res) => {
         success: true,
         chats: chatDataWithDetails
     })
-})
+});
+
+export const sendMessage = TryCatch(async (req: AuthenticatedRequest, res) => {
+    const senderId = req.user?.id as string;
+    const { chatId, text } = req.body;
+    const imageFile = req.file as any;
+
+    if (!senderId) {
+        res.status(401).json({
+            message: "Unauthorized: Sender ID required"
+        });
+        return;
+    }
+
+    if (!text && !imageFile) {
+        res.status(400).json({
+            message: "Either text or image is required",
+        });
+        return;
+    }
+
+    const safeChatId = String(chatId);
+
+    const chat = await prisma.chat.findFirst({
+        where: {
+            id: safeChatId,
+            users: { has: senderId }
+        }
+    });
+
+    if (!chat) {
+        res.status(404).json({
+            message: "Chat not found or you are not a participant",
+        });
+        return;
+    }
+
+    const otherUserId = chat.users.find((userId) => userId.toString() !== senderId.toString());
+    
+    if (!otherUserId) {
+        res.status(401).json({
+            message: "No other user",
+        });
+        return;
+    }
+
+    const isImage = !!imageFile;
+    const messageType = isImage ? "image" : "text";
+    const latestMessageText = isImage ? "📷 Image" : text;
+    const safeText = text ? String(text) : undefined;
+
+    const savedMessage = await prisma.message.create({
+        data: {
+            chatId: safeChatId,
+            sender: senderId,
+            messageType: messageType,
+            seen: false,
+            ...(safeText && { text: safeText }),
+            ...(isImage && {
+                image: {
+                    url: imageFile.path,
+                    publicId: imageFile.filename
+                }
+            })
+        }
+    });
+
+    await prisma.chat.update({
+        where: {
+            id: safeChatId
+        },
+        data: {
+            latestMessage: latestMessageText,
+            latestSender: senderId
+        }
+    });
+
+    res.status(201).json({
+        message: savedMessage,
+        sender: senderId
+    });
+});
