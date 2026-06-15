@@ -32,7 +32,7 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-white dark:bg-[#0a0a0a] px-4 overflow-hidden">
+    <div className="relative min-h-screen flex items-center justify-center bg-fuchsia-50 dark:bg-[#0a0a0a] px-4 overflow-hidden">
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="h-150 w-150 animate-pulse rounded-full dark:bg-[radial-gradient(circle,rgba(99,102,241,0.18)_0%,rgba(99,102,241,0.06)_40%,transparent_70%)] bg-[radial-gradient(circle,rgba(99,102,241,0.10)_0%,rgba(99,102,241,0.03)_40%,transparent_70%)]" />
       </div>
@@ -55,7 +55,7 @@ const LoginPage = () => {
            rounded-[20px] p-10
            [backdrop-filter:blur(20px)]
            dark:[box-shadow:0_0_0_1px_rgba(99,102,241,0.1),0_32px_64px_rgba(0,0,0,0.5)]
-           [box-shadow:0_0_0_1px_rgba(99,102,241,0.08),0_32px_64px_rgba(0,0,0,0.08)]"
+           [box-shadow:0_0_0_1px_rgba(99,102,241,0.08),0_32px_64px_rgba(0,0,0,0.08)] shadow-2xl"
       >
         <div
           className="absolute top-0 left-10 right-10 h-px rounded-full"
@@ -76,7 +76,7 @@ const LoginPage = () => {
         </div>
 
         <h1 className="mb-1.5 text-[22px] font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">
-          Welcome To Chatter
+          Welcome to <span className="bg-linear-to-r from-fuchsia-600  to-fuchsia-900 dark:to-fuchsia-400 bg-clip-text text-transparent text-2xl font-serif italic tracking-tightest pl-1">Chatter</span>
         </h1>
         <p className="mb-8 text-sm leading-relaxed text-zinc-500 dark:text-zinc-500">
           Sign in with your email. We'll send you an OTP.
@@ -86,7 +86,7 @@ const LoginPage = () => {
           <div className="space-y-2">
             <label
               htmlFor="email"
-              className="block text-[11px] font-medium uppercase tracking-widest text-zinc-500 dark:text-zinc-500"
+              className="block text-[11px] font-medium uppercase tracking-widest text-zinc-700 dark:text-zinc-500"
             >
               Email Address
             </label>
@@ -104,9 +104,9 @@ const LoginPage = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={loading}
-                className="peer h-11 rounded-[10px] border-white/8 bg-white/4 pl-10 text-sm text-zinc-100 placeholder:text-zinc-700 
+                className="peer h-11 rounded-[10px] dark:border-white/8 bg-white/4 pl-10 text-sm text-zinc-700 placeholder:text-zinc-500  dark:text-zinc-300
                            focus:border-fuchsia-500/50 focus:ring-fuchsia-500/15
-                           disabled:opacity-50"
+                           disabled:opacity-50 border-black/15"
               />
             </div>
           </div>
@@ -121,11 +121,12 @@ const LoginPage = () => {
           >
             {loading ? (
               <div className="flex items-center justify-center gap-2">
-                Sending OTP to your email...
+                
                 <Loader
-                  className="ml-2 h-4 w-4 transition-transform duration-200"
+                  className="ml-2 h-4 w-4 transition-transform duration-200 animate-spin"
                   strokeWidth={2}
                 />
+                Sending OTP to your email...
               </div>
             ) : (
               <div className="flex items-center justify-center gap-2">
