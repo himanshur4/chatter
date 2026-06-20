@@ -7,6 +7,7 @@ import { Mail, ArrowRight, Loader } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { user_service } from "@/context/AppContext";
 
 const LoginPage = () => {
   const [email, setEmail] = useState<string>("");
@@ -19,7 +20,7 @@ const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const { data } = await axios.post(`http://localhost:5000/api/v1/login`, {
+      const { data } = await axios.post(`${user_service}/api/v1/login`, {
         email,
       });
       toast.success(data.message);

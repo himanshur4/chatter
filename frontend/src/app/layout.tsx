@@ -6,6 +6,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Toaster } from "@/components/ui/sonner";
+import { AppProvider } from "@/context/AppContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -45,9 +46,7 @@ export default function RootLayout({
           <div className="absolute top-4 right-4 z-50">
             <ModeToggle />
           </div>
-
-          {children}
-
+          <AppProvider>{children}</AppProvider>
           {/* 5. Mount the Toaster so your error/success popups actually appear */}
           <Toaster position="top-center" richColors />
         </ThemeProvider>
