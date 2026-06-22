@@ -2,15 +2,17 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { user_service } from "@/context/AppContext";
+import { useAppData, user_service } from "@/context/AppContext";
 import axios from "axios";
 import Cookies from "js-cookie";
 import { ArrowRight, ChevronLeft, Loader, Lock} from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { redirect, useRouter, useSearchParams } from "next/navigation";
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import Loading from "./Loading";
 
 const VerifyOtp = () => {
+  const {isAuth,setIsAuth,setUser,loading:userLoading,fetchChats,fetchUsers}=useAppData();
   const [loading, setLoading] = useState(false);
   const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
   const [error, setError] = useState<string>("");
@@ -86,6 +88,10 @@ const VerifyOtp = () => {
       });
       setOtp(["", "", "", "", "", ""]);
       inputRefs.current[0]?.focus();
+      setUser(data.user);
+      setIsAuth(true);
+      fetchChats();
+      fetchUsers();
     } catch (error: any) {
       setError(error.response.data.message);
     } finally {
@@ -108,6 +114,11 @@ const VerifyOtp = () => {
       setResendLoading(false);
     }
   };
+
+  if(userLoading) return <Loading/>
+
+  if(isAuth) redirect("/chat");
+
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-fuchsia-50 dark:bg-[#0a0a0a] px-4 overflow-hidden">
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
