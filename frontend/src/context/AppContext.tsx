@@ -21,8 +21,8 @@ export interface User {
 
 export interface Chat {
   id: string;
-  users: string[];
-  latestMessage: {
+  users: string[] | any[]; // Added any[] to support populated user objects
+  latestMessage?: {
     text: string;
     sender: string;
   };
@@ -33,8 +33,9 @@ export interface Chat {
 
 export interface Chats {
   id: string;
-  user: User;
-  chat: Chat;
+  user?: User;
+  chat?: Chat;
+  users?: User[]; // Added support for flat chat documents
 }
 
 interface AppContextType {
@@ -47,7 +48,7 @@ interface AppContextType {
   fetchUsers: () => Promise<void>;
   fetchChats: () => Promise<void>;
   users: User[] | null;
-  chats: Chats[] | null;
+  chats: Chats[] | any[] | null;
   setChats: React.Dispatch<React.SetStateAction<Chats[] | null>>;
 }
 
@@ -70,7 +71,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           Authorization: `Bearer ${token}`,
         },
       });
-      setUser(data);
+      // FIX 1: Safely extract the nested 'user' object shown in your Network tab
+      setUser(data.user ? data.user : data);
       setIsAuth(true);
       setLoading(false);
     } catch (error) {
@@ -97,7 +99,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         },
       });
 
-      setChats(data.chats);
+      setChats(data.chats ? data.chats : data);
     } catch (error) {
       console.log(error);
     }
@@ -114,11 +116,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         },
       });
 
-      setUsers(data);
+      setUsers(data.users ? data.users : data);
     } catch (error) {
       console.log(error);
     }
   }
+  
   useEffect(() => {
     fetchUser();
     fetchChats();
@@ -126,7 +129,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   }, []);
 
   return (
-    <AppContext.Provider value={{ user, setUser, isAuth, setIsAuth, loading,chats,setChats,logoutUser,users,fetchUsers,fetchChats }}>
+    <AppContext.Provider
+      value={{
+        user,
+        setUser,
+        isAuth,
+        setIsAuth,
+        loading,
+        chats,
+        setChats,
+        logoutUser,
+        users,
+        fetchUsers,
+        fetchChats,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );

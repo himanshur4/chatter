@@ -43,9 +43,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {/* 4. Mount the toggle in the absolute top-right corner */}
-          <div className="absolute top-4 right-4 z-50">
-            <ModeToggle />
-          </div>
+          <div id="global-theme-toggle" className="absolute top-4 right-4 z-50">
+  <ModeToggle />
+</div>
           <AppProvider>{children}</AppProvider>
           {/* 5. Mount the Toaster so your error/success popups actually appear */}
           <Toaster position="top-center" richColors />
