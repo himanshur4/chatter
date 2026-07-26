@@ -21,7 +21,7 @@ export interface User {
 
 export interface Chat {
   id: string;
-  users: string[] | any[]; // Added any[] to support populated user objects
+  users: string[] | any[];
   latestMessage?: {
     text: string;
     sender: string;
@@ -33,9 +33,14 @@ export interface Chat {
 
 export interface Chats {
   id: string;
+  otherUser?: User;
+  latestMessage?: string;
+  latestSender?: string;
+  updatedAt?: string;
+  unseenCount?: number;
+  users?: User[] | string[]; 
   user?: User;
   chat?: Chat;
-  users?: User[]; // Added support for flat chat documents
 }
 
 interface AppContextType {
@@ -71,7 +76,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           Authorization: `Bearer ${token}`,
         },
       });
-      // FIX 1: Safely extract the nested 'user' object shown in your Network tab
       setUser(data.user ? data.user : data);
       setIsAuth(true);
       setLoading(false);

@@ -2,6 +2,7 @@ import axios from "axios";
 import prisma from "../config/db.js";
 import TryCatch from "../config/TryCatch.js";
 import type { AuthenticatedRequest } from "../middlewares/isAuth.js";
+import { getReceiverSocketId, io } from "../config/socket.js";
 
 export const createNewChat = TryCatch(
   async (req: AuthenticatedRequest, res) => {
@@ -171,13 +172,23 @@ export const sendMessage = TryCatch(async (req: AuthenticatedRequest, res) => {
   const messageType = isImage ? "image" : "text";
   const latestMessageText = isImage ? "📷 Image" : text;
   const safeText = text ? String(text) : undefined;
+  // socket setup
+  const receiverSocketId = getReceiverSocketId(otherUserId.toString());
+  let isReceiverInChatRoom = false;
 
-  const savedMessage = await prisma.message.create({
+  if (receiverSocketId) {
+    const receiverSocket = io.sockets.sockets.get(receiverSocketId);
+    if (receiverSocket && receiverSocket.rooms.has(safeChatId)) {
+      isReceiverInChatRoom = true;
+    }
+  }
+
+  let savedMessage = await prisma.message.create({
     data: {
       chatId: safeChatId,
       sender: senderId,
       messageType: messageType,
-      seen: false,
+      seen: isReceiverInChatRoom,
       ...(safeText && { text: safeText }),
       ...(isImage && {
         image: {
@@ -197,6 +208,23 @@ export const sendMessage = TryCatch(async (req: AuthenticatedRequest, res) => {
       latestSender: senderId,
     },
   });
+
+  if (receiverSocketId) {
+    io.to(receiverSocketId).emit("newMessage", savedMessage);
+  }
+
+  const senderSocketId = getReceiverSocketId(senderId.toString());
+  if (senderSocketId) {
+    io.to(senderSocketId).emit("newMessage", savedMessage);
+  }
+
+  if (isReceiverInChatRoom && senderSocketId) {
+    io.to(senderSocketId).emit("messagesSeen", {
+      chatId: safeChatId,
+      seenBy: otherUserId,
+      messageId: [savedMessage.id],
+    });
+  }
 
   res.status(201).json({
     message: savedMessage,
@@ -235,7 +263,7 @@ export const getMessagesByChat = TryCatch(
       });
       return;
     }
-    const messagesToMarkSeen = await prisma.message.findFirst({
+    const messagesToMarkSeen = await prisma.message.findMany({
       where: {
         chatId: chatId as string,
         sender: { not: userId },
@@ -265,29 +293,38 @@ export const getMessagesByChat = TryCatch(
 
     const otherUserId = chat.users.find((id) => id !== userId);
     if (!otherUserId) {
-        res.status(400).json({
-          message: "No other user found in this chat",
-        });
-        return;
-      }
+      res.status(400).json({
+        message: "No other user found in this chat",
+      });
+      return;
+    }
     try {
-       
       const response = await axios.get(
         `${process.env.USER_SERVICE}/api/v1/user/${otherUserId}`,
       );
-      
-      //socket work
+
+      if (messagesToMarkSeen.length > 0) {
+        const otherUserSocketId = getReceiverSocketId(otherUserId.toString());
+
+        if (otherUserSocketId) {
+          io.to(otherUserSocketId).emit("messagesSeen", {
+            chatId: chatId,
+            seenBy: userId,
+            messageIds: messagesToMarkSeen.map((msg) => msg.id),
+          });
+        }
+      }
 
       res.json({
         messages,
-        user:response.data.user
-      })
+        user: response.data.user,
+      });
     } catch (error) {
       console.log(`Failed to fetch user data for ID ${otherUserId}:`, error);
       res.json({
         messages,
-        user:{id:otherUserId,name:"Unknown User"}
-      })
+        user: { id: otherUserId, name: "Unknown User" },
+      });
     }
   },
 );
