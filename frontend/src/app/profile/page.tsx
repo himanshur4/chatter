@@ -6,7 +6,7 @@ import Cookies from "js-cookie";
 import axios from "axios";
 import { toast } from "sonner";
 import Loading from "@/components/Loading";
-import { ArrowLeft, Save, User, UserCircle } from "lucide-react";
+import { ArrowLeft, Mail, Save, User, UserCircle } from "lucide-react";
 
 const ProfilePage = () => {
   const { user, isAuth, loading, setUser } = useAppData();
@@ -72,7 +72,6 @@ const ProfilePage = () => {
       />
 
       <div className="relative z-10 w-full max-w-2xl mx-auto pt-12 px-4 sm:px-6">
-      
         <div className="flex items-center gap-5 mb-10">
           <button
             onClick={() => router.push("/chat")}
@@ -161,6 +160,18 @@ const ProfilePage = () => {
                     </button>
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-3">
+                  Email Address
+                </label>
+                <div className="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/10 opacity-70">
+                  <Mail className="w-5 h-5 text-zinc-500 shrink-0" />
+                  <span className="text-zinc-300 font-medium text-[15px] truncate">
+                    {user?.email || "Not set"}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
