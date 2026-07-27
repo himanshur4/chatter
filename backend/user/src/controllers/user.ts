@@ -92,37 +92,41 @@ export const myProfile = TryCatch(async (req: AuthenticatedRequest, res) => {
     })
 });
 
-export const updateName=TryCatch(async(req:AuthenticatedRequest, res)=>{
-    const user=req.user;
-    const {name}=req.body;
-    if(!user){
+export const updateName = TryCatch(async (req: AuthenticatedRequest, res) => {
+    const user = req.user;
+    const { name } = req.body;
+
+    if (!user) {
         res.status(400).json({
-            message:"Please login to continue"
+            message: "Please login to continue"
         });
         return;
     }
-    if(!name || name.trim().length==0){
+
+    if (!name || name.trim().length == 0) {
         res.status(400).json({
-            message:"name cannot be empty"
-        })
+            message: "name cannot be empty"
+        });
+        return;
     }
-    const updatedUser=await prisma.user.update({
-        where:{
-            id:user.id
+
+    const updatedUser = await prisma.user.update({
+        where: {
+            id: user.id
         },
-        data:{
-            name:name
+        data: {
+            name: name
         }
     });
 
-    const token=generateToken(updatedUser.id);
+    const token = generateToken(updatedUser.id);
     
     res.status(200).json({
-        updatedUser,
+        message: "Profile updated successfully!", 
+        user: updatedUser,                
         token
-    })
-
-}); 
+    });
+});
 
 export const getAUser=TryCatch(async(req,res)=>{
     const userId=req.params.id as string
