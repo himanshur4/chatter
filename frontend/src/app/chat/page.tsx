@@ -319,7 +319,7 @@ const ChatApp = () => {
     };
   }, [typingTimeout]);
 
-  if (loading) return <Loading />;
+  if (loading || !isAuth) return <Loading />;
 
   return (
     <div className="relative min-h-screen flex bg-fuchsia-50 dark:bg-[#0a0a0a] overflow-hidden transition-colors duration-300">
