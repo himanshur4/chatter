@@ -37,7 +37,7 @@ export const startSendOtpConsumer=async()=>{
                     });
 
                     await transporter.sendMail({
-                       from:"Chatter",
+                       from:`"Chatter" <${process.env.USER}>`,
                        to,
                        subject,
                        text:body 
