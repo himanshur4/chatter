@@ -14,6 +14,11 @@ app.use(cors());
 
 app.use("/api/v1", chatRoutes);
 
+// Used by Docker to check the container is alive (see HEALTHCHECK in the Dockerfile)
+app.get("/health", (_req, res) => {
+    res.json({ status: "ok" });
+});
+
 server.listen(port, async () => {
     console.log(`Server is running on port ${port}`);
     await connectDb();

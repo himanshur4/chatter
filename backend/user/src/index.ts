@@ -18,6 +18,11 @@ app.use(express.json());
 app.use(cors());
 app.use("/api/v1",userRoutes);
 
+// Used by Docker to check the container is alive (see HEALTHCHECK in the Dockerfile)
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
 redisClient
   .connect()
   .then(() => console.log("connected to redis"))

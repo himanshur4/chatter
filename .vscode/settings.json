@@ -1,0 +1,11 @@
+{
+  // Pin the Prisma extension to use the v6 language server.
+  // MongoDB is NOT supported in Prisma v7, so we must stay on v6. This stops the editor
+  // from flagging `url = env("DATABASE_URL")` in schema.prisma, which Prisma 6 requires.
+  // See: https://www.prisma.io/docs/orm/v7/core-concepts/supported-databases/mongodb
+  "prisma.pinToPrisma6": true,
+  "[prisma]": {
+    "editor.defaultFormatter": "Prisma.prisma"
+  },
+  "python.terminal.useEnvFile": true
+}

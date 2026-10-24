@@ -1,0 +1,98 @@
+# Chatter: the whole stack as containers.
+#
+# Production (EC2): GitHub Actions copies this file to the server and runs it with the
+# images it built (see .github/workflows/ci-cd.yml and docs/DEPLOYMENT.md).
+#
+# Local development (needs a .env next to this file, see .env.example):
+#   docker compose up -d rabbitmq    # only RabbitMQ, then run the services with `npm run dev`
+#   docker compose up --build        # or build and run everything in containers
+#
+# Every port is bound to 127.0.0.1, so nothing here is reachable from the internet directly.
+# On EC2, Nginx (behind Cloudflare) is the only public entry point and forwards to these ports.
+
+name: chatter
+
+# Settings shared by every container (merged into each service with `<<: *defaults`)
+x-defaults: &defaults
+  restart: unless-stopped   # restart after a crash and after the server reboots
+  logging:
+    options:                # cap log files so they can't fill up the server's disk
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  rabbitmq:
+    <<: *defaults
+    image: rabbitmq:4.3-management-alpine
+    hostname: rabbitmq      # RabbitMQ stores its data under its hostname, so keep it fixed
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?set RABBITMQ_USER in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:?set RABBITMQ_PASS in .env}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq   # queued messages survive restarts and redeploys
+    ports:
+      - "127.0.0.1:5672:5672"     # AMQP, for services running outside Docker (local dev)
+      - "127.0.0.1:15672:15672"   # management UI (on EC2, open it through an SSH tunnel)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      start_period: 30s
+      retries: 12
+
+  user:
+    <<: *defaults
+    image: ${IMAGE_REGISTRY:-ghcr.io/himanshur4}/chatter-user:${IMAGE_TAG:-latest}
+    build: ./backend/user
+    env_file: ./backend/user/.env
+    environment:            # these override the matching values in the .env file
+      PORT: 5000
+      Rabbitmq_Host: rabbitmq       # containers reach each other by service name
+      Rabbitmq_Username: ${RABBITMQ_USER}
+      Rabbitmq_password: ${RABBITMQ_PASS}
+    ports:
+      - "127.0.0.1:5000:5000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  chat:
+    <<: *defaults
+    image: ${IMAGE_REGISTRY:-ghcr.io/himanshur4}/chatter-chat:${IMAGE_TAG:-latest}
+    build: ./backend/chat
+    env_file: ./backend/chat/.env
+    environment:
+      PORT: 5002
+      USER_SERVICE: http://user:5000
+    ports:
+      - "127.0.0.1:5002:5002"
+    depends_on:
+      - user
+
+  mail:
+    <<: *defaults
+    image: ${IMAGE_REGISTRY:-ghcr.io/himanshur4}/chatter-mail:${IMAGE_TAG:-latest}
+    build: ./backend/mail
+    env_file: ./backend/mail/.env
+    environment:
+      PORT: 5001
+      Rabbitmq_Host: rabbitmq
+      Rabbitmq_Username: ${RABBITMQ_USER}
+      Rabbitmq_password: ${RABBITMQ_PASS}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  frontend:
+    <<: *defaults
+    image: ${IMAGE_REGISTRY:-ghcr.io/himanshur4}/chatter-frontend:${IMAGE_TAG:-latest}
+    build:
+      context: ./frontend
+      args:                 # baked into the browser bundle at build time (public URLs, not secrets)
+        NEXT_PUBLIC_USER_SERVICE_URL: ${NEXT_PUBLIC_USER_SERVICE_URL:-http://localhost:5000}
+        NEXT_PUBLIC_CHAT_SERVICE_URL: ${NEXT_PUBLIC_CHAT_SERVICE_URL:-http://localhost:5002}
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  rabbitmq_data:

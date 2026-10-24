@@ -1,0 +1,2 @@
+# Shell scripts run on Linux (EC2, GitHub Actions) and break with Windows line endings
+*.sh text eol=lf

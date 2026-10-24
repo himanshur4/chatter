@@ -1,0 +1,14 @@
+# Secrets: never commit these (this repository is public)
+.env
+.env.*
+!.env.example
+*.pem
+
+# Dependencies and build output
+node_modules/
+dist/
+.next/
+
+# OS files
+.DS_Store
+Thumbs.db

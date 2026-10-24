@@ -57,7 +57,7 @@ io.on("connection", (socket: Socket) => {
 
   socket.on("leaveChat", (chatId) => {
     socket.leave(chatId);
-    console.log(`User ${userId} joined chat room ${chatId}`);
+    console.log(`User ${userId} left chat room ${chatId}`);
   });
 
   socket.on("disconnect", () => {

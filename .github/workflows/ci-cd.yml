@@ -1,0 +1,196 @@
+# CI/CD for Chatter
+#
+#   Every pull request and every push to main:
+#     build   Builds a Docker image for each service, in parallel. This also type-checks
+#             the TypeScript (tsc) and runs `next build`, so broken code fails here.
+#   Pushes to main only, once every build has passed:
+#     build   ...also pushes the images to GitHub Container Registry (ghcr.io),
+#             tagged with the commit SHA
+#     deploy  Copies docker-compose.yml + the secrets to EC2 over SSH and runs
+#             deploy/deploy.sh there (pull images, restart, health-check, auto-rollback)
+#
+# One-time setup (secrets, variables, server): docs/DEPLOYMENT.md
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:        # adds a "Run workflow" button on the Actions tab
+
+# A newer push to the same pull request cancels its older, still-running build
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  packages: write           # lets GITHUB_TOKEN push images to ghcr.io
+
+env:
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/chatter
+  IMAGE_TAG: sha-${{ github.sha }}
+  # Public URL of the site. The frontend needs it at build time to know where the APIs are.
+  SITE_URL: ${{ vars.SITE_URL || 'https://chatter-t.me' }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.service }}
+    # Images only run on the CPU type they're built for: x86 by default, ARM if DOCKER_PLATFORM=linux/arm64
+    runs-on: ${{ vars.DOCKER_PLATFORM == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false      # report every service's result, even if one of them fails
+      matrix:
+        include:
+          - service: user
+            context: backend/user
+          - service: chat
+            context: backend/chat
+          - service: mail
+            context: backend/mail
+          - service: frontend
+            context: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build${{ github.event_name != 'pull_request' && ' and push' || '' }} image
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          platforms: ${{ vars.DOCKER_PLATFORM || 'linux/amd64' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:latest
+          # Links the image to this repository on GitHub
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          # Only the frontend uses these; the other images ignore them
+          build-args: |
+            NEXT_PUBLIC_USER_SERVICE_URL=${{ env.SITE_URL }}
+            NEXT_PUBLIC_CHAT_SERVICE_URL=${{ env.SITE_URL }}
+          # Reuse unchanged layers from earlier runs, so rebuilds take seconds instead of minutes
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    name: Deploy to EC2
+    needs: build
+    # Only for main, and only after the server setup is done and DEPLOY_ENABLED is set to true
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ vars.SITE_URL || 'https://chatter-t.me' }}
+    # Never run two deploys at once: a newer one waits for the running one to finish
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    env:
+      DEPLOY_DIR: chatter-prod    # folder in the server user's home directory
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check that the deployment secrets are set
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          RABBITMQ_PASS: ${{ secrets.RABBITMQ_PASS }}
+          USER_ENV: ${{ secrets.USER_ENV }}
+          CHAT_ENV: ${{ secrets.CHAT_ENV }}
+          MAIL_ENV: ${{ secrets.MAIL_ENV }}
+        run: |
+          missing=""
+          for name in EC2_HOST EC2_USER EC2_SSH_KEY RABBITMQ_PASS USER_ENV CHAT_ENV MAIL_ENV; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see docs/DEPLOYMENT.md)"
+            exit 1
+          fi
+
+      - name: Set up SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2.pem
+          chmod 600 ~/.ssh/ec2.pem
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+          # Lets the next steps simply run `ssh ec2 ...`
+          cat >> ~/.ssh/config <<EOF
+          Host ec2
+            HostName $EC2_HOST
+            User $EC2_USER
+            IdentityFile ~/.ssh/ec2.pem
+            ServerAliveInterval 30
+          EOF
+
+      - name: Prepare files for the server
+        env:
+          RABBITMQ_USER: ${{ vars.RABBITMQ_USER || 'chatter' }}
+          RABBITMQ_PASS: ${{ secrets.RABBITMQ_PASS }}
+          USER_ENV: ${{ secrets.USER_ENV }}
+          CHAT_ENV: ${{ secrets.CHAT_ENV }}
+          MAIL_ENV: ${{ secrets.MAIL_ENV }}
+        run: |
+          umask 077     # the secret files below are readable by their owner only
+          mkdir -p bundle/backend/user bundle/backend/chat bundle/backend/mail
+          cp docker-compose.yml deploy/deploy.sh bundle/
+          printf '%s\n' "$USER_ENV" > bundle/backend/user/.env
+          printf '%s\n' "$CHAT_ENV" > bundle/backend/chat/.env
+          printf '%s\n' "$MAIL_ENV" > bundle/backend/mail/.env
+          printf 'RABBITMQ_USER=%s\nRABBITMQ_PASS=%s\n' "$RABBITMQ_USER" "$RABBITMQ_PASS" > bundle/.env
+
+      # In the next two steps, $VARIABLES inside ssh "..." are filled in here on the runner
+      # before the command is sent to the server. That's intended (hence the SC2029 notes).
+      - name: Copy files to the server
+        run: |
+          # shellcheck disable=SC2029
+          tar -C bundle -czf - . | ssh ec2 "mkdir -p $DEPLOY_DIR && tar -C $DEPLOY_DIR -xzf -"
+
+      - name: Deploy
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Log the server in to ghcr.io with this run's short-lived token, so it can pull the images
+          # shellcheck disable=SC2029
+          printf '%s' "$GHCR_TOKEN" | ssh ec2 "docker login ghcr.io -u $GITHUB_ACTOR --password-stdin"
+          # shellcheck disable=SC2029
+          ssh ec2 "bash $DEPLOY_DIR/deploy.sh $IMAGE_TAG"
+
+      - name: Log the server out of ghcr.io
+        if: always()
+        run: ssh ec2 "docker logout ghcr.io" || true
+
+      - name: Check the live site
+        # Cloudflare sometimes challenges requests from GitHub's servers, so only warn here
+        continue-on-error: true
+        run: |
+          failed=0
+          check() {   # check <name> <path> <expected HTTP status>
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$SITE_URL$2")
+            if [ "$code" = "$3" ]; then echo "✅ $1: $2 -> $code"
+            else echo "::warning::$1: expected $3 from $2 but got $code"; failed=1; fi
+          }
+          check "Frontend" /login 200
+          check "User service" /api/v1/user/000000000000000000000000 404
+          check "Chat service" /api/v1/chat/all 401
+          echo "### Deployed \`${GITHUB_SHA::7}\` to $SITE_URL" >> "$GITHUB_STEP_SUMMARY"
+          exit $failed

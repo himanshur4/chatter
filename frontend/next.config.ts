@@ -1,8 +1,8 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  // Emits a self-contained server in .next/standalone, which the Docker image runs
+  output: "standalone",
 };
 
 export default nextConfig;
